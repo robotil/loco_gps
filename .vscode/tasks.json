@@ -1,0 +1,19 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+		{
+			"label": "ROS: catkin build",
+			"type": "shell",
+			"command": "source /home/bigboss/git/ws/devel/setup.bash; catkin build",
+			// "args": [
+			// 	"-j4",
+			// 	"-DCMAKE_BUILD_TYPE=Debug"
+			// ],
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		}
+	]
+}
