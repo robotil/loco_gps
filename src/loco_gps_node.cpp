@@ -2,8 +2,20 @@
 #include "std_msgs/String.h"
 #include "gps_common/GPSFix.h"
 #include "gps_common/GPSStatus.h"
-
 #include <sstream>
+#include "loco_gps_node.h"
+//#include <sys/ioctl.h>
+
+#include <unistd.h>
+#include <fcntl.h>
+
+#include <string.h> 
+#include <string>
+#include <iostream> 
+
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <cerrno>
 
 /**
  * This tutorial demonstrates simple sending of messages over the ROS system.
@@ -28,6 +40,9 @@ int main(int argc, char **argv)
    * NodeHandle destructed will close down the node.
    */
   ros::NodeHandle n;
+
+  ClocoGpsNode locoGpsNode;
+  locoGpsNode.start();
 
   /**
    * The advertise() function is how you tell ROS that you want to
@@ -84,4 +99,746 @@ int main(int argc, char **argv)
 
 
   return 0;
+}
+
+
+ClocoGpsNode::ClocoGpsNode()
+{  
+}
+
+ClocoGpsNode::~ClocoGpsNode()
+{
+  m_exit = false;
+
+  close(m_socket);
+
+  if (m_receiveDataThread.joinable())
+  {
+    m_receiveDataThread.join();
+  }
+}
+
+
+void ClocoGpsNode::start()
+{
+  openCommunication("192.168.168.184",20175);
+  m_receiveDataThread = std::thread(&ClocoGpsNode::receiveData, this);
+}
+
+bool ClocoGpsNode::isSameChksumOk()
+{
+   unsigned char cksumResult =0;
+   cksumResult = calcCksum();
+
+   if (cksumResult == m_rcvBuffer[strlen(m_sentenceStr) -1 ])
+   {
+     return true;
+   }
+   return false;
+}
+
+void ClocoGpsNode::rotateData()
+{
+  int count = 0;
+
+  if ( m_byteToRemove > 0 )
+  {
+    //rotate the buffer
+    for (count = m_byteToRemove ;count < m_bufferSize;count++)
+    {
+      m_rcvBuffer[count - m_byteToRemove] = m_rcvBuffer[count];
+    }
+    //put 0 in the end
+    count--;
+    for (;(((count- m_byteToRemove) < m_bufferSize) && (count < 1024));count++)
+    {
+      m_rcvBuffer[count - m_byteToRemove] = 0;
+    }
+
+    m_bufferSize -=  m_byteToRemove;   
+  }
+}
+
+void ClocoGpsNode::receiveData()
+{
+  
+  while(!m_exit)
+  {
+    if (receiveFromSensor() != (-1) )
+    {      
+      while(m_bufferSize)
+      {
+        //std::cout<<"\nThe data:\n"<<m_rcvBuffer<< std::endl;
+        //parse the msg
+        parseData();
+
+        //clear the handle msg
+        rotateData();        
+      }
+      //memset(m_rcvBuffer,0,1024);
+    }
+  }
+}
+
+bool ClocoGpsNode::parseData()
+{
+    bool parsed = false;
+  
+    char tmpStr[6] = {};
+
+    m_byteToRemove = 0;
+
+
+
+    //m_bufferSize = strlen(m_rcvBuffer);
+
+    if (m_bufferSize < 1)
+    {
+      return false;
+    }
+
+    memset(m_typeStr,0,1024);
+    memset(m_sentenceStr,0,1024);
+
+    if(m_rcvBuffer[0] != '$')
+    {
+      m_byteToRemove = 1;
+    }
+    else
+    { 
+      std::cout<<m_rcvBuffer<<std::endl;
+      int index = 0; 
+      bool endOfStrFound = false;
+      bool newMsgBeforeEnd = false;
+      bool checkSum = false;
+      int checkSumBeginIndex = 0;
+      if ( m_bufferSize >= 6 )
+      {
+        memcpy(tmpStr,&m_rcvBuffer[1],5);
+      }
+
+      while (( index< m_bufferSize) && (!endOfStrFound) && (!newMsgBeforeEnd))
+      {
+        m_sentenceStr[index] = m_rcvBuffer[index];
+
+        if (index>0 && m_rcvBuffer[index] == '\n' && m_rcvBuffer[index-1]=='\r')
+        {
+          endOfStrFound= true;     
+        }
+
+        if (index>0 && m_rcvBuffer[index]== '*')
+        {
+          checkSumBeginIndex = index + 1;
+        }
+
+        if (index>0 && m_rcvBuffer[index]== '$')
+        {
+          newMsgBeforeEnd = true;
+        }
+
+        index++;
+      }
+
+      if (newMsgBeforeEnd)
+      {
+        m_byteToRemove = index - 1;
+      }
+      else if((endOfStrFound) && (checkSumBeginIndex > 0))
+      {
+        //int value;
+        //sscanf_s((char *)&m_rcvBuffer[checkSumBeginIndex],"%x:",&value);
+        m_byteToRemove = index;
+
+        /*if (isSameChksumOk())
+        {
+          std::cout<<"\ncksum ok"<<std::endl;*/
+          
+          parsed = true;        
+
+          /*if (!strcmp(tmpStr,"GPGGA"))
+          {
+            handleGPGGA();
+          }
+          else*/ if (!strcmp(tmpStr,"GPGSA"))
+          {
+            handleGPGSA();
+          }
+          else if (!strcmp(tmpStr,"GPGSV"))
+          {
+            handleGPGSV();
+          }
+          else if (!strcmp(tmpStr,"GPRMC"))
+          {
+            handleGPRMC();
+          }
+          else if (!strcmp(tmpStr,"GPVTG"))
+          {
+            handleGPVTG();
+          }
+          else
+          {
+            std::cout<< "\nUknown msg name"<<std::endl;
+          }
+          
+        /*}
+        else
+        {
+            std::cout<<"\ncksum not good"<<std::endl;
+        }*/
+      }
+    }
+
+}
+
+unsigned char ClocoGpsNode::calcCksum()
+{
+  unsigned char sum = 0;
+  unsigned int len = strlen(m_sentenceStr);
+  for( unsigned int count = 0;count < len ; count++)
+  {
+    sum = sum ^ m_sentenceStr[count];
+  }
+  return sum;
+}
+
+/*void ClocoGpsNode::handleGPGGA()
+{
+  nmeaGGAData data = {};
+  
+  parseGPGGA(data);
+  setGPGGA(data);
+}*/
+
+/*void ClocoGpsNode::parseGPGGA(nmeaGGAData& data)
+{
+
+}*/
+
+/*void ClocoGpsNode::parseGPGGA(nmeaGGAData& data)
+{
+  char tmpStr[100] ={};
+  char tmpStrIn[100] ={};
+  int strLength = (int) strlen(m_sentenceStr);
+  int i = 0 , j = 0, pointer = 0;
+
+  for (i = 0; i<strLength; i++)
+  {
+    tmpStr[j] = m_sentenceStr[i];
+    j++;
+    if(m_sentenceStr[i] == ',')
+    {
+        tmpStr[j-1] = 0;
+        switch (pointer)
+        {
+          case 0:
+          case 14:
+          case 15:
+          break;
+          
+          case 1: //HHMMSS.SS
+            memcpy(tmpStrIn,tmpStr,2);
+            tmpStrIn[3] = 0;
+            data.Hour = atoi(tmpStrIn);
+            
+            memcpy(tmpStrIn,&tmpStr[2],2);
+            tmpStrIn[3] = 0;
+            data.Minuts = atoi(tmpStrIn);
+
+            memcpy(tmpStrIn,&tmpStr[4],2);
+            tmpStrIn[3] = 0;
+            data.Seconds = atoi(tmpStrIn);
+
+            memcpy(tmpStrIn,&tmpStr[6],2);
+            tmpStrIn[3] = 0;
+            data.miliseconds = atoi(tmpStrIn);
+          break;
+
+          case 2:
+            data.Latitude = atof(tmpStr);
+          break;
+
+          case 3:
+            data.NorthOrSouth = tmpStr[0];
+          break;
+
+          case 4:
+            data.Longitude = atof(tmpStr);
+          break;
+
+          case 5:
+            data.EastOrWest = tmpStr[0];
+          break;
+ 
+          case 6:
+            data.Quality = atoi(tmpStr);
+          break;
+
+          case 7:
+            data.SatNum = atoi(tmpStr);
+          break;
+
+          case 8:
+            data.HourDilutionOfPrescision = atof(tmpStr);
+          break;
+    
+          case 9:
+            data.AntenaAlt = atof(tmpStr);
+          break;
+
+          case 10:
+            data.HighUnits = atoi(tmpStr);
+          break;
+
+          case 11:
+            data.GeoidalSeparation = atof(tmpStr);
+          break;
+
+          case 12:
+            data.eoidalSeperationUnits = tmpStr[0];
+          break;
+  
+          case 13:
+            data.AgeOfDifferantionalGPSData = atof(tmpStr);
+          break;
+        
+        default:
+        break;
+        }
+        pointer++;
+        j=0;
+    }
+  }
+}*/
+
+
+void ClocoGpsNode::handleGPGSA ()
+{
+  nmeaGSAData data = {};
+  
+  parseGPGSA(data);
+  setGPGSA(data);
+}
+
+void ClocoGpsNode::parseGPGSA (nmeaGSAData& data)
+{
+ char tmpStr[100] ={};
+  char tmpStrIn[100] ={};
+  int strLength = (int) strlen(m_sentenceStr);
+  int i = 0 , j = 0, pointer = 0;
+
+  for (i = 0; i<strLength; i++)
+  {
+    tmpStr[j] = m_sentenceStr[i];
+    j++;
+    if(m_sentenceStr[i] == ',')
+    {
+        tmpStr[j-1] = 0;
+        switch (pointer)
+        {
+          case 0:
+          case 1:
+          case 2:
+          case 3:
+          case 4:
+          case 5:
+          case 6:
+          case 7:
+          case 8:
+          case 9:
+          case 10:
+          case 11:
+          case 12:
+          case 13:
+          case 14:
+          break;
+
+          case 15:
+            data.PDOPinMtr = atof(tmpStr);
+          break;
+
+          case 16:
+            data.HDOPinMtr = tmpStr[0];
+          break;
+
+          case 17:
+            data.VDOPinMtr = atof(tmpStr);
+          break;          
+        
+        default:
+        break;
+        }
+        pointer++;
+        j=0;
+    }
+  }
+}
+
+
+void ClocoGpsNode::handleGPGSV ()
+{
+  nmeaGSVData data = {};
+  
+  parseGPGSV(data);
+  setGPGSV(data);
+}
+
+void ClocoGpsNode::parseGPGSV (nmeaGSVData& data)
+{
+ char tmpStr[100] ={};
+  char tmpStrIn[100] ={};
+  int strLength = (int) strlen(m_sentenceStr);
+  int i = 0 , j = 0, pointer = 0;
+
+  for (i = 0; i<strLength; i++)
+  {
+    tmpStr[j] = m_sentenceStr[i];
+    j++;
+    if(m_sentenceStr[i] == ',')
+    {
+        tmpStr[j-1] = 0;
+        switch (pointer)
+        {
+          case 0:
+            memcpy(tmpStrIn,tmpStr,2);
+            tmpStrIn[3] = 0;
+          break;
+         
+          case 1:
+            memcpy(tmpStrIn,tmpStr,2);
+            tmpStrIn[3] = 0;
+          break;
+
+          case 2:
+            memcpy(tmpStrIn,tmpStr,2);
+            tmpStrIn[3] = 0;
+          break;
+
+          case 3:
+            memcpy(tmpStrIn,tmpStr,2);
+            tmpStrIn[3] = 0;
+            data.NuberOfSatellites = atoi(tmpStrIn);
+          break;
+
+          case 4:
+            memcpy(tmpStrIn,tmpStr,2);
+            tmpStrIn[3] = 0;
+          break;
+
+          case 5:
+            memcpy(tmpStrIn,tmpStr,2);
+            tmpStrIn[3] = 0;
+            data.Pitch = atoi(tmpStrIn);
+          break;
+
+          case 6:
+            memcpy(tmpStrIn,tmpStr,2);
+            tmpStrIn[4] = 0;
+            data.Yaw = atoi(tmpStrIn);
+          break;
+            
+          case 7:
+            memcpy(tmpStrIn,tmpStr,2);
+            tmpStrIn[3] = 0;
+          break;
+
+          default:
+          break;
+        }
+        pointer++;
+        j=0;
+    }
+  }
+}
+
+
+void ClocoGpsNode::handleGPRMC ()
+{
+  nmeaRMCData data = {};
+  
+  parseGPRMC(data);
+  setGPRMC(data);
+}
+
+void ClocoGpsNode::parseGPRMC (nmeaRMCData& data)
+{
+  char tmpStr[100] ={};
+  char tmpStrIn[100] ={};
+  int strLength = (int) strlen(m_sentenceStr);
+  int i = 0 , j = 0, pointer = 0, tempStrLenght = 0;
+  char degStr[100] = {};
+  char minStr[100] ={};
+
+  for (i = 0; i<strLength; i++)
+  {
+    tmpStr[j] = m_sentenceStr[i];
+    j++;
+    if(m_sentenceStr[i] == ',')
+    {
+        tmpStr[j-1] = 0;
+        switch (pointer)
+        {
+          case 0:
+          break;
+          
+          case 1: //HHMMSS.SS
+            memcpy(tmpStrIn,tmpStr,2);
+            tmpStrIn[3] = 0;
+            data.Hour = atoi(tmpStrIn);
+            
+            memcpy(tmpStrIn,&tmpStr[2],2);
+            tmpStrIn[3] = 0;
+            data.Minuts = atoi(tmpStrIn);
+
+            memcpy(tmpStrIn,&tmpStr[4],2);
+            tmpStrIn[3] = 0;
+            data.Seconds = atoi(tmpStrIn);
+
+            memcpy(tmpStrIn,&tmpStr[6],2);
+            tmpStrIn[3] = 0;
+            
+            memcpy(tmpStrIn,&tmpStr[7],2);
+            tmpStrIn[3] = 0;
+            data.miliseconds = atoi(tmpStrIn);
+          break;
+
+          case 2:
+            data.NavReceiverWarning = false;
+            memcpy(tmpStrIn,tmpStr,1);
+            tmpStrIn[1] = 0;
+            if (strcmp(tmpStrIn,"V") == 0)
+            {
+               data.NavReceiverWarning = true;
+            }
+          break;
+
+          case 3:
+            tempStrLenght = (int) strlen(tmpStr);
+            memcpy(degStr,tmpStr,2);
+            degStr[2] = 0;
+
+            if (tempStrLenght > 2)
+            {
+              memcpy(minStr,&tmpStr[2],tempStrLenght - 2);
+              data.Latitude = atof(degStr) +atof(minStr)/60.0;
+            }
+          break;
+          
+          case 4:
+          data.NorthOrSouth = tmpStr[0];
+          if (data.NorthOrSouth == 'S')
+          {
+            data.Latitude *= -1.0;
+          }
+          break;
+
+
+          case 5:
+            tempStrLenght = (int) strlen(tmpStr);
+            memcpy(degStr,tmpStr,2);
+            degStr[3] = 0;
+
+            if (tempStrLenght > 2)
+            {
+              memcpy(minStr,&tmpStr[3],tempStrLenght - 2);
+              data.Longitude = atof(degStr) +atof(minStr)/60.0;
+            }
+          break;
+          
+          case 6:
+            data.EastOrWest = tmpStr[0];
+            if (data.NorthOrSouth == 'W')
+            {
+              data.Longitude *= -1.0;
+            }
+          break;
+
+          case 7:
+            data.SpeedOverGroundKnot = atof(tmpStr);
+          break;
+
+          case 8:
+            data.TrackMadeGoodDeg = atof(tmpStr);
+          break;
+        
+          case 9:
+            memcpy(tmpStrIn,tmpStr,2);
+            tmpStrIn[3] = 0;
+            data.Day = atoi(tmpStrIn);
+            
+            memcpy(tmpStrIn,&tmpStr[2],2);
+            tmpStrIn[3] = 0;
+            data.Month = atoi(tmpStrIn);
+            
+            memcpy(tmpStrIn,&tmpStr[4],2);
+            tmpStrIn[3] = 0;
+            data.Year = atoi(tmpStrIn) + 2000; 
+          break;
+
+          case 10:
+            data.MagneticVariationDeg = atof(tmpStr);
+          break;
+        
+        /*SYSTEMTIME St;*/
+    
+          default:
+          break;
+        }
+        pointer++;
+        j=0;
+    }
+  }
+}
+
+
+void ClocoGpsNode::handleGPVTG ()
+{
+  nmeaVTGData data = {};
+  
+  parseGPVTG(data);
+  setGPVTG(data);
+}
+
+void ClocoGpsNode::parseGPVTG (nmeaVTGData& data)
+{
+ char tmpStr[100] ={};
+  char tmpStrIn[100] ={};
+  int strLength = (int) strlen(m_sentenceStr);
+  int i = 0 , j = 0, pointer = 0;
+
+  for (i = 0; i<strLength; i++)
+  {
+    tmpStr[j] = m_sentenceStr[i];
+    j++;
+    if(m_sentenceStr[i] == ',')
+    {
+        tmpStr[j-1] = 0;
+        switch (pointer)
+        {
+         
+          case 0:
+          break;
+
+          case 1:
+            data.TrakeDegree1 = atof(tmpStr);
+          break;
+
+          case 2:
+            data.TrueChar = tmpStr[0];
+          break;
+
+          case 3:
+            data.TrakeDegree2 = atof(tmpStr);
+          break;   
+
+          case 4:
+            data.MagneticChar = tmpStr[0];
+          break;
+
+          case 5:
+            data.SpeedKnots = atof(tmpStr);
+          break;  
+
+          case 6:
+            data.KnotChar = tmpStr[0];
+          break;    
+          
+          case 7:
+            data.SpeedKilometerPerHour = atof(tmpStr);
+          break;    
+        
+        /* char KilometerPerHourChar;*/
+
+          case 8:
+          default:
+          break;
+          }
+        pointer++;
+        j=0;
+    }
+  }
+}
+
+
+void ClocoGpsNode::setGPGGA(nmeaGGAData ggaData)
+{  
+  std::lock_guard<std::mutex>lock(m_mutex);
+  m_ggaData = ggaData;
+}
+void ClocoGpsNode::setGPGSA(nmeaGSAData gsaData)
+{
+  std::lock_guard<std::mutex>lock(m_mutex);
+  m_gsaData = gsaData;
+}
+void ClocoGpsNode::setGPGSV(nmeaGSVData gsvData)
+{
+  std::lock_guard<std::mutex>lock(m_mutex);
+  m_gsvData = gsvData;
+}
+void ClocoGpsNode::setGPRMC(nmeaRMCData rmcData)
+{
+  std::lock_guard<std::mutex>lock(m_mutex);
+  m_rmcData = rmcData;
+}
+void ClocoGpsNode::setGPVTG(nmeaVTGData vtgData)
+{
+  std::lock_guard<std::mutex>lock(m_mutex);
+  m_vtgData = vtgData;
+}
+
+
+
+
+/*udp communication*/
+
+bool ClocoGpsNode::openCommunication(std::string ipAddr, int portNumber)
+{
+
+  if ((m_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) 
+	{ 
+		printf("\n Socket creation error \n"); 
+		return false; 
+	} 
+
+  memset(&m_serverAddr,0,sizeof(m_serverAddr));
+  memset(&m_otherAddr,0,sizeof(m_otherAddr));
+
+	m_serverAddr.sin_family = AF_INET; 
+  m_serverAddr.sin_addr.s_addr = INADDR_ANY;
+  m_serverAddr.sin_port = htons(portNumber); 
+
+  if(0 > bind(m_socket, (const struct sockaddr *)&m_serverAddr, sizeof(m_serverAddr)))
+  {
+    std::cout<< "\n bind fail. err -"<< std::strerror(errno)<<std::endl;
+    
+    return false;
+  }
+  return true;
+  
+}
+
+unsigned int ClocoGpsNode::receiveFromSensor()
+{
+
+	socklen_t len = sizeof(m_otherAddr);
+  ssize_t readNum;
+
+  //readNum = recvfrom(m_socket , (char *)m_rcvBuffer, 1024, 0,(struct sockaddr*)&m_otherAddr, &len); 
+  readNum = recv(m_socket , (char *)m_rcvBuffer + m_bufferSize, 1024, 0); 
+  if (readNum  == -1)
+  {
+    std::cout<< "\nReceiveFromSensor fail.\n"<< std::strerror(errno)<<std::endl;
+  }
+  else
+  {
+    m_bufferSize = strlen (m_rcvBuffer);
+    std::cout<< "\nReceive msg:" <<readNum<< std::endl;
+  }
+
+  return readNum;
+}
+
+void ClocoGpsNode::sendToSensor(std::string msg)
+{
+	send(m_socket , msg.c_str(), msg.length() , 0 ); 
+	std::cout<< "\nSend msg" << std::endl;
 }
