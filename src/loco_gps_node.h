@@ -7,6 +7,9 @@
 #include <unistd.h> 
 #include <string>
 
+#include "gps_common/GPSFix.h"
+#include "gps_common/GPSStatus.h"
+
 
 class ClocoGpsNode {
 
@@ -14,6 +17,7 @@ public:
     ClocoGpsNode();
     ~ClocoGpsNode();
     void start();
+    void getReadData(gps_common::GPSFix& fixMsg);
 
 
 private:
@@ -107,13 +111,13 @@ private:
     void sendToSensor(std::string msg);
 
 
-    //void parseGPGGA(nmeaGGAData& data);
+    void parseGPGGA(nmeaGGAData& data);
     void parseGPGSA(nmeaGSAData& data);
     void parseGPGSV(nmeaGSVData& data);
     void parseGPRMC(nmeaRMCData& data);
     void parseGPVTG(nmeaVTGData& data);
     
-    //void handleGPGGA();
+    void handleGPGGA();
     void handleGPGSA();
     void handleGPGSV();
     void handleGPRMC();

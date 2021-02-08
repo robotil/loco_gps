@@ -1,7 +1,6 @@
 #include "ros/ros.h"
 #include "std_msgs/String.h"
-#include "gps_common/GPSFix.h"
-#include "gps_common/GPSStatus.h"
+
 #include <sstream>
 #include "loco_gps_node.h"
 //#include <sys/ioctl.h>
@@ -41,7 +40,15 @@ int main(int argc, char **argv)
    */
   ros::NodeHandle n;
 
+  int rateInHz = 10;
+  if (argc == 2)
+  {
+    rateInHz = atoi(argv[1]);  
+  }
+
+
   ClocoGpsNode locoGpsNode;
+  ROS_INFO("\nrateInHz=%d", rateInHz);
   locoGpsNode.start();
 
   /**
@@ -63,7 +70,7 @@ int main(int argc, char **argv)
    */
   ros::Publisher loco_gps_pub = n.advertise<gps_common::GPSFix>("/loco/gps_data", 1000);
 
-  ros::Rate loop_rate(10);
+  ros::Rate loop_rate(rateInHz);
 
   /**
    * A count of how many messages we have sent. This is used to create
@@ -75,13 +82,17 @@ int main(int argc, char **argv)
     /**
      * This is a message object. You stuff it with data, and then publish it.
      */
-    gps_common::GPSFix msg;
+    gps_common::GPSFix msgFix = {};
+    //gps_common::GPSStatus msgStatus = {};
 
     // std::stringstream ss;
     // ss << "hello world " << count;
-    msg.latitude = 32.4f;
+    //msgFix.latitude = 32.4f;
+    
+    //get the data
+    locoGpsNode.getReadData(msgFix);
 
-    ROS_INFO("%lf", msg.latitude);
+    ROS_INFO("\nlat:%lf lon:%lf alt:%lf\nsat:%d speed:%lf\nhdop:%lf track:%lf\nstatus=%d", msgFix.latitude, msgFix.longitude,msgFix.altitude, msgFix.status.satellites_used, msgFix.speed, msgFix.hdop, msgFix.track,msgFix.status.status);
 
     /**
      * The publish() function is how you send messages. The parameter
@@ -89,7 +100,8 @@ int main(int argc, char **argv)
      * given as a template parameter to the advertise<>() call, as was done
      * in the constructor above.
      */
-    loco_gps_pub.publish(msg);
+    loco_gps_pub.publish(msgFix);
+    //loco_gps_pub1.publish(msgStatus);
 
     ros::spinOnce();
 
@@ -123,6 +135,39 @@ void ClocoGpsNode::start()
 {
   openCommunication("192.168.168.184",20175);
   m_receiveDataThread = std::thread(&ClocoGpsNode::receiveData, this);
+}
+
+
+void ClocoGpsNode::getReadData(gps_common::GPSFix& fixMsg)
+{
+  std::lock_guard<std::mutex>lock(m_mutex);
+  
+  //gps fix
+  fixMsg.latitude = m_ggaData.Latitude;  //double GGA/RMC
+  
+  //N/S indicator GGA/RMC
+  if ((m_ggaData.NorthOrSouth =='S') || (m_ggaData.NorthOrSouth == 's'))
+  {
+    fixMsg.latitude *= (-1);
+  }
+ 
+  fixMsg.longitude = m_ggaData.Longitude; //double GGA/RMC
+  
+  //E/W indicator GGA/RMC
+  if ((m_ggaData.EastOrWest == 'W') || (m_ggaData.EastOrWest == 'w'))
+  {
+    fixMsg.longitude *= (-1);
+  }
+
+  fixMsg.hdop = m_ggaData.HourDilutionOfPrescision; //GGA 
+  fixMsg.altitude = m_ggaData.AntenaAlt; //float64 GGA
+  fixMsg.speed = m_rmcData.SpeedOverGroundKnot; //double RMC/VTG - take from RMC
+  fixMsg.track = m_rmcData.TrackMadeGoodDeg; //double RMC/VTG - take from RMC
+
+
+  //gps status
+  fixMsg.status.status = m_ggaData.Quality; //Position fix indicator int16 GGA/RMC
+  fixMsg.status.satellites_used = m_ggaData.SatNum; //int16  satellite_used  GGA/RMC - take from GGA
 }
 
 bool ClocoGpsNode::isSameChksumOk()
@@ -255,11 +300,11 @@ bool ClocoGpsNode::parseData()
           
           parsed = true;        
 
-          /*if (!strcmp(tmpStr,"GPGGA"))
+          if (!strcmp(tmpStr,"GPGGA"))
           {
             handleGPGGA();
           }
-          else*/ if (!strcmp(tmpStr,"GPGSA"))
+          else if (!strcmp(tmpStr,"GPGSA"))
           {
             handleGPGSA();
           }
@@ -301,20 +346,16 @@ unsigned char ClocoGpsNode::calcCksum()
   return sum;
 }
 
-/*void ClocoGpsNode::handleGPGGA()
+void ClocoGpsNode::handleGPGGA()
 {
   nmeaGGAData data = {};
   
   parseGPGGA(data);
   setGPGGA(data);
-}*/
+}
 
-/*void ClocoGpsNode::parseGPGGA(nmeaGGAData& data)
-{
 
-}*/
-
-/*void ClocoGpsNode::parseGPGGA(nmeaGGAData& data)
+void ClocoGpsNode::parseGPGGA(nmeaGGAData& data)
 {
   char tmpStr[100] ={};
   char tmpStrIn[100] ={};
@@ -355,6 +396,8 @@ unsigned char ClocoGpsNode::calcCksum()
 
           case 2:
             data.Latitude = atof(tmpStr);
+            data.Latitude /= 100.0;
+
           break;
 
           case 3:
@@ -363,6 +406,7 @@ unsigned char ClocoGpsNode::calcCksum()
 
           case 4:
             data.Longitude = atof(tmpStr);
+            data.Longitude /= 100.0;
           break;
 
           case 5:
@@ -408,7 +452,7 @@ unsigned char ClocoGpsNode::calcCksum()
         j=0;
     }
   }
-}*/
+}
 
 
 void ClocoGpsNode::handleGPGSA ()

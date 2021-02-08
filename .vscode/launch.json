@@ -4,12 +4,13 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "loco",
             "type": "cppdbg",
             "request": "launch",
             "program": "/home/bigboss/git/ws/devel/.private/loco_gps/lib/loco_gps/loco_gps_node",
-            "args": [],
+            "args": ["100"],
             "stopAtEntry": true,
             "cwd": "${workspaceFolder}",
             "environment": [],
