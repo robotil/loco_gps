@@ -11,7 +11,10 @@
 echo "Here"
 source /home/ghost/loco_ws/devel/setup.bash
 echo "HereHere"
+sleep 60
 
+echo "Now"
+#rosnode list &
 roslaunch loco_gps loco.launch  2>&1> /home/ghost/loco.log &
 
 echo "Started Loco"

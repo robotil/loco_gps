@@ -1,7 +1,8 @@
 [Unit]
 Description=Loco features service
-After=ghost.service
-StartLimitIntervalSec=0
+Requires=ghost.service
+#After=ghost.service
+StartLimitIntervalSec=10
 
 [Service]
 User=ghost
