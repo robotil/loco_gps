@@ -7,9 +7,12 @@
 # This script is run on system startup using /etc/systemd/system/ghost.service
 
 # Source
-source /home/ghost/.environment_vars.bash
+#source /home/ghost/.environment_vars.bash
+echo "Here"
 source /home/ghost/loco_ws/devel/setup.bash
+echo "HereHere"
 
-roslaunch gps_goal gps_goal.launch
+roslaunch loco_gps loco.launch  2>&1> /home/ghost/loco.log &
+
 echo "Started Loco"
 

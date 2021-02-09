@@ -2,3 +2,19 @@ catkin config --cmake-args -DBUILD_TYPE=Release -DOpenCV_DIR=~/Thirdparties/usr/
 
 mount local file system with workspace:
 sshfs ghost@192.168.168.105:/home/ghost/my_dev_ws </your/local/mount_point>
+
+nc -u -l 30175
+
+==================
+Internet
+=====================
+ifconfig -a
+ping www.google.com
+sudo ifdown eth0
+ping www.google.com
+ifconfig -a
+sudo ifdown eth1
+ifconfig -a
+sudo ifup eth1
+ping www.google.com
+
