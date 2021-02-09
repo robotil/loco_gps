@@ -10,4 +10,6 @@ sudo apt install sshfs
 sudo apt install ros-melodic-tf2
 sudo apt install ros-melodic-tf2-web-republisher
 sudo apt install git-all
+sudo apt install ros-melodic-rosmsg
+sudo apt install ros-melodic-genpy
 

@@ -1,13 +1,13 @@
 [Unit]
 Description=Loco features service
 After=ghost.service
-StartKimitIntervalSec=0
+StartLimitIntervalSec=0
 
 [Service]
-Type=forking
-Restart=always
-RestartSec=1
 User=ghost
+Type=forking
+#Restart=always
+#RestartSec=1
 ExecStart=/bin/bash /home/ghost/loco_ws/src/loco_gps/additionals/loco.sh
 
 [Install]

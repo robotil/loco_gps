@@ -92,7 +92,7 @@ int main(int argc, char **argv)
     //get the data
     locoGpsNode.getReadData(msgFix);
 
-    ROS_INFO("\nlat:%lf lon:%lf alt:%lf\nsat:%d speed:%lf\nhdop:%lf track:%lf\nstatus=%d", msgFix.latitude, msgFix.longitude,msgFix.altitude, msgFix.status.satellites_used, msgFix.speed, msgFix.hdop, msgFix.track,msgFix.status.status);
+    ROS_DEBUG("\nlat:%lf lon:%lf alt:%lf\nsat:%d speed:%lf\nhdop:%lf track:%lf\nstatus=%d", msgFix.latitude, msgFix.longitude,msgFix.altitude, msgFix.status.satellites_used, msgFix.speed, msgFix.hdop, msgFix.track,msgFix.status.status);
 
     /**
      * The publish() function is how you send messages. The parameter
@@ -102,6 +102,7 @@ int main(int argc, char **argv)
      */
     loco_gps_pub.publish(msgFix);
     //loco_gps_pub1.publish(msgStatus);
+    ROS_INFO("topic sent %d\n",count);
 
     ros::spinOnce();
 
@@ -109,6 +110,11 @@ int main(int argc, char **argv)
     ++count;
   }
 
+  ROS_INFO("Stop and destroy thread\n");
+
+  locoGpsNode.~ClocoGpsNode();
+
+  ROS_INFO("ClocoGpsNode::~ClocoGpsNode() has been called\n");
 
   return 0;
 }
