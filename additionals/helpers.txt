@@ -1,0 +1,4 @@
+catkin config --cmake-args -DBUILD_TYPE=Release -DOpenCV_DIR=~/Thirdparties/usr/local/share/OpenCV
+
+mount local file system with workspace:
+sshfs ghost@192.168.168.105:/home/ghost/my_dev_ws </your/local/mount_point>

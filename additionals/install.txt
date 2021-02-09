@@ -1,0 +1,13 @@
+sudo apt install terminator
+sudo apt install ros-melodic-rosbridge-server 
+sudo apt install ros-melodic-navigation
+sudo apt install ros-melodic-gps-common
+pip install geographiclib
+git clone https://github.com/robotil/loco_gps.git
+git clone https://github.com/mhallak/scripts.git
+git clone https://github.com/danielsnider/gps_goal.git
+sudo apt install sshfs
+sudo apt install ros-melodic-tf2
+sudo apt install ros-melodic-tf2-web-republisher
+sudo apt install git-all
+

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+
+    <!-- Launch rosbridge web server-->
+    <include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch"/>
+    <include file="$(find gps_goal)/launch/gps_goal.launch">
+
+    </include>
+
+    <!--GPS Topic -->
+    <node  pkg="loco_gps" name="loco_gps_node" type="loco_gps_node"/>
+
+</launch>
