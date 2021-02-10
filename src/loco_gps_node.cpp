@@ -17,8 +17,12 @@
 #include <cerrno>
 
 /**
- * This tutorial demonstrates simple sending of messages over the ROS system.
+ * UDP In block mode - therefore, cannot destroy node properly
+ * Think of using select
+ * Think of using own sigint handler
+ * http://wiki.ros.org/roscpp/Overview/Initialization%20and%20Shutdown
  */
+
 int main(int argc, char **argv)
 {
   /**
