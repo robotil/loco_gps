@@ -130,14 +130,14 @@ ClocoGpsNode::ClocoGpsNode()
 
 ClocoGpsNode::~ClocoGpsNode()
 {
-  m_exit = false;
-
-  close(m_socket);
+  m_exit = true;
 
   if (m_receiveDataThread.joinable())
   {
     m_receiveDataThread.join();
   }
+  
+  close(m_socket);
 }
 
 
@@ -222,7 +222,7 @@ void ClocoGpsNode::receiveData()
     if (receiveFromSensor() != (-1) )
     {      
       while(m_bufferSize)
-      {
+      {        
         //std::cout<<"\nThe data:\n"<<m_rcvBuffer<< std::endl;
         //parse the msg
         parseData();
@@ -230,7 +230,6 @@ void ClocoGpsNode::receiveData()
         //clear the handle msg
         rotateData();        
       }
-      //memset(m_rcvBuffer,0,1024);
     }
   }
 }
@@ -261,7 +260,7 @@ bool ClocoGpsNode::parseData()
     }
     else
     { 
-      std::cout<<m_rcvBuffer<<std::endl;
+      //std::cout<<m_rcvBuffer<<std::endl;
       int index = 0; 
       bool endOfStrFound = false;
       bool newMsgBeforeEnd = false;
@@ -332,14 +331,8 @@ bool ClocoGpsNode::parseData()
           }
           else
           {
-            std::cout<< "\nUknown msg name"<<std::endl;
-          }
-          
-        /*}
-        else
-        {
-            std::cout<<"\ncksum not good"<<std::endl;
-        }*/
+            ROS_INFO("\nUknown msg name");
+          }                  
       }
     }
 
@@ -862,7 +855,7 @@ bool ClocoGpsNode::openCommunication(std::string ipAddr, int portNumber)
 
   if(0 > bind(m_socket, (const struct sockaddr *)&m_serverAddr, sizeof(m_serverAddr)))
   {
-    std::cout<< "\n bind fail. err -"<< std::strerror(errno)<<std::endl;
+    ROS_INFO("\n bind fail. err -%s",std::strerror(errno));
     
     return false;
   }
@@ -876,16 +869,14 @@ unsigned int ClocoGpsNode::receiveFromSensor()
 	socklen_t len = sizeof(m_otherAddr);
   ssize_t readNum;
 
-  //readNum = recvfrom(m_socket , (char *)m_rcvBuffer, 1024, 0,(struct sockaddr*)&m_otherAddr, &len); 
   readNum = recv(m_socket , (char *)m_rcvBuffer + m_bufferSize, 1024, 0); 
   if (readNum  == -1)
   {
-    std::cout<< "\nReceiveFromSensor fail.\n"<< std::strerror(errno)<<std::endl;
+    ROS_INFO("\nReceiveFromSensor fail %s", std::strerror(errno));
   }
   else
   {
-    m_bufferSize = strlen (m_rcvBuffer);
-    std::cout<< "\nReceive msg:" <<readNum<< std::endl;
+    m_bufferSize = strlen (m_rcvBuffer);  
   }
 
   return readNum;
@@ -894,5 +885,4 @@ unsigned int ClocoGpsNode::receiveFromSensor()
 void ClocoGpsNode::sendToSensor(std::string msg)
 {
 	send(m_socket , msg.c_str(), msg.length() , 0 ); 
-	std::cout<< "\nSend msg" << std::endl;
 }
