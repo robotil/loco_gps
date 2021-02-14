@@ -106,19 +106,12 @@ int main(int argc, char **argv)
      */
     loco_gps_pub.publish(msgFix);
     //loco_gps_pub1.publish(msgStatus);
-    ROS_INFO("topic sent %d\n",count);
 
     ros::spinOnce();
 
     loop_rate.sleep();
     ++count;
   }
-
-  ROS_INFO("Stop and destroy thread\n");
-
-  locoGpsNode.~ClocoGpsNode();
-
-  ROS_INFO("ClocoGpsNode::~ClocoGpsNode() has been called\n");
 
   return 0;
 }

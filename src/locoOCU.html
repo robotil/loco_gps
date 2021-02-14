@@ -140,36 +140,36 @@
       var reportMissionState = false;
       var ourMission;
       
-      function initMap() {
-        map = new google.maps.Map(document.getElementById('map'), {
-          center: robilZero,
-          zoom: 16,
-          mapTypeId: 'satellite'
-        });
+    //   function initMap() {
+    //     map = new google.maps.Map(document.getElementById('map'), {
+    //       center: robilZero,
+    //       zoom: 16,
+    //       mapTypeId: 'satellite'
+    //     });
         
-        bobcatOrientation = {
-	  //path: 'M 125,5 155,90 245,90 175,145 200,230 125,180 50,230 75,145 5,90 95,90 z',
-	  path: google.maps.SymbolPath.FORWARD_OPEN_ARROW,
-	  fillColor: 'gold',
-	  //fillOpacity: 0.8,
-	  scale: 3,
-	  strokeColor: 'gold',
-	  strokeWeight: 3,
-	  rotation: symb_rotation
-	};
-        startMarker = new google.maps.Marker({
-	  position: robilZero,
-	  map: map,
-	  title: 'Start Point',
-	  label: 'S'
-	});
-	movingMarker = new google.maps.Marker({
-	  position: robilZero,
-	  map: map,
-	  title: 'RobilIcon',
-	  label: 'R',
-	  icon: bobcatOrientation //'Another_Bobcat_tracked_side.png'
-      });  
+    //     bobcatOrientation = {
+	//   //path: 'M 125,5 155,90 245,90 175,145 200,230 125,180 50,230 75,145 5,90 95,90 z',
+	//   path: google.maps.SymbolPath.FORWARD_OPEN_ARROW,
+	//   fillColor: 'gold',
+	//   //fillOpacity: 0.8,
+	//   scale: 3,
+	//   strokeColor: 'gold',
+	//   strokeWeight: 3,
+	//   rotation: symb_rotation
+	// };
+    //     startMarker = new google.maps.Marker({
+	//   position: robilZero,
+	//   map: map,
+	//   title: 'Start Point',
+	//   label: 'S'
+	// });
+	// movingMarker = new google.maps.Marker({
+	//   position: robilZero,
+	//   map: map,
+	//   title: 'RobilIcon',
+	//   label: 'R',
+	//   icon: bobcatOrientation //'Another_Bobcat_tracked_side.png'
+    //   });  
 	// Connecting to ROS
 	// -----------------
 	// If there is an error on the backend, an 'error' emit will be emitted.
@@ -217,30 +217,27 @@
 	})
 
 	init_pos_gps.subscribe(function(message) {
-	 // console.log('Initial Position is: lat:' + message.latitude + ' lng:' + message.longitude);
-	  robilPosition = new google.maps.LatLng( message.latitude, message.longitude )
+	 console.log('Initial Position is: lat:' + message.latitude + ' lng:' + message.longitude);
+	 // robilPosition = new google.maps.LatLng( message.latitude, message.longitude )
 	  //publish current position
 	  var elem = document.getElementById('rawGPSLonLatAltId');
 	  elem.value = message.latitude.toFixed(4)+", "+ message.longitude.toFixed(4)+","+message.altitude;
 	  var elem = document.getElementById('currentCoordId');
 	  elem.value = message.latitude.toFixed(4)+", "+ message.longitude.toFixed(4);	  
-	  var elem = document.getElementById('currentrawHeadingGPSIdCoordId');
+	  var elem = document.getElementById('rawHeadingGPSId');
 	  elem.value = message.track.toFixed(4);
 	 // console.log('robilPosition: ', robilPosition.toString());
 	  
-	//  tfClient.processFeedback(tf);
-	//  getRobilOrigin(deltaX, deltaY, robilPosition.lat(), robilPosition.lng());
-	  //robil.lat = message.latitude;
-	  //robil.lng = message.longitude;
-	  startMarker.setPosition(robilPosition);
-	  movingMarker.setPosition(robilPosition);
-	  map.panTo(robilPosition);
+	
+	//   startMarker.setPosition(robilPosition);
+	//   movingMarker.setPosition(robilPosition);
+	//   map.panTo(robilPosition);
 	  
-	  var infowindow = new google.maps.InfoWindow({
-	  content: 'Start' + ' lat:' + robilPosition.lat() + ' lng: '+ robilPosition.lng()
-	  });
-	  //marker.addListener('click', function() {//});
-	  infowindow.open(map, startMarker);
+	//   var infowindow = new google.maps.InfoWindow({
+	//   content: 'Start' + ' lat:' + robilPosition.lat() + ' lng: '+ robilPosition.lng()
+	//   });
+	//   //marker.addListener('click', function() {//});
+	//   infowindow.open(map, startMarker);
 	  init_pos_gps.unsubscribe();
 	});
 
@@ -269,11 +266,10 @@
 	 // console.log('yaw_deg:'+yaw_deg);
 	  symb_rotation = yaw_deg;
 	  bobcatOrientation.rotation = yaw_deg;
-	  movingMarker.setIcon(bobcatOrientation);
+	 // movingMarker.setIcon(bobcatOrientation);
 	   var elem = document.getElementById('currentOrientationId');
 	  elem.value = yaw_deg;
-	  //<td><input id="rawOdomIdPos" value="0,0,0,0,0,0,0"></td>
-	//<td><input id="rawOdomIdVel" value="0,0,0,0,0,0"></td>
+	
 	  
 	  var pos_str = start_position.x.toFixed(4)+","+start_position.y.toFixed(4)+","+start_position.z.toFixed(4);
 	  var ori_str = start_position.qx.toFixed(4)+","+start_position.qy.toFixed(4)+","+start_position.qz.toFixed(4)+start_position.qw.toFixed(4);
@@ -281,11 +277,11 @@
 	  elem.value = pos_str+","+ori_str;
 	  var elem = document.getElementById('rawOdomIdVel');
 	  elem.value = vel_linear_str+","+vel_angular_str;
-	  var infowindow = new google.maps.InfoWindow({
-	  content: ' yaw_deg:' + yaw_deg
-	  });
-	  //marker.addListener('click', function() {//});
-	  infowindow.open(map, movingMarker);
+	//   var infowindow = new google.maps.InfoWindow({
+	//   content: ' yaw_deg:' + yaw_deg
+	//   });
+	//   //marker.addListener('click', function() {//});
+	//   infowindow.open(map, movingMarker);
 	  init_rot_ins.unsubscribe();
 	});
 //
@@ -311,39 +307,7 @@
 	displayCurrentMissionState();
 	getNextMissionId();
 	//console.log("NextMissionId="+currMissionId);
-        var drawingManager = new google.maps.drawing.DrawingManager({
-          drawingMode: google.maps.drawing.OverlayType.POLYLINE,
-          drawingControl: true,
-          drawingControlOptions: {
-            position: google.maps.ControlPosition.TOP_LEFT,
-            drawingModes: ['polyline'] //[google.maps.drawing.OverlayType.POLYLINE]
-	  },
-	  polylineOptions: {
-	    path: robilZero
-	  }
-        });
-        
-        drawingManager.addListener('overlaycomplete', function(event) {
-	  // First, check if there is an existing polyline.
-	  // If there is, get rid of it and remove the markers
-          if (polyline) {
-	      polyline.setMap(null);
-	  }
-          // Switching the drawing mode to the HAND (i.e., no longer drawing).
-          drawingManager.setDrawingMode(null);
-          // Creating a new editable polyline from the overlay.
-          polyline = event.overlay;
-          polyline.setEditable(true);
-          executeMission();
-          
-          // Make sure the path is recomputed if the poly is changed.
-          polyline.getPath().addListener('set_at', executeMission);
-          polyline.getPath().addListener('insert_at', executeMission);
-          });
-          
-        drawingManager.setMap(map);
-        monitorPositionAndOrientation();
-   } 
+
    
       function executeMission() {
         if (isRobilReadyGetMission()==false){
@@ -855,8 +819,8 @@
   }
    
     </script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAofrSgojdpUBPhB8HfT8opr0wqt6SGwrc&v=3&libraries=drawing&callback=initMap"
-         async defer></script>
+    <!--no network script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAofrSgojdpUBPhB8HfT8opr0wqt6SGwrc&v=3&libraries=drawing&callback=initMap"
+         async defer></script -->
     <!--script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAWLmv9Q1OEY_YOk-5bzkPBQ6sc_KA1nTU&v=3&libraries=drawing&callback=initMap"
          async defer></script -->
   </body>
