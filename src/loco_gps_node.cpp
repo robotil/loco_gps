@@ -146,18 +146,18 @@ void ClocoGpsNode::getReadData(gps_common::GPSFix& fixMsg)
   std::lock_guard<std::mutex>lock(m_mutex);
   
   //gps fix
-  fixMsg.latitude = m_ggaData.Latitude;  //double GGA/RMC
+  fixMsg.latitude = m_rmcData.Latitude;  //double GGA/RMC
   
   //N/S indicator GGA/RMC
-  if ((m_ggaData.NorthOrSouth =='S') || (m_ggaData.NorthOrSouth == 's'))
+  if ((m_rmcData.NorthOrSouth =='S') || (m_rmcData.NorthOrSouth == 's'))
   {
     fixMsg.latitude *= (-1);
   }
  
-  fixMsg.longitude = m_ggaData.Longitude; //double GGA/RMC
+  fixMsg.longitude = m_rmcData.Longitude; //double GGA/RMC
   
   //E/W indicator GGA/RMC
-  if ((m_ggaData.EastOrWest == 'W') || (m_ggaData.EastOrWest == 'w'))
+  if ((m_rmcData.EastOrWest == 'W') || (m_rmcData.EastOrWest == 'w'))
   {
     fixMsg.longitude *= (-1);
   }
@@ -324,7 +324,7 @@ bool ClocoGpsNode::parseData()
           }
           else
           {
-            ROS_INFO("\nUknown msg name");
+            ROS_DEBUG("\nUnknown msg name:%s", tmpStr);
           }                  
       }
     }
@@ -674,12 +674,12 @@ void ClocoGpsNode::parseGPRMC (nmeaRMCData& data)
 
           case 5:
             tempStrLenght = (int) strlen(tmpStr);
-            memcpy(degStr,tmpStr,2);
-            degStr[3] = 0;
+            memcpy(degStr,tmpStr,3);
+            degStr[4] = 0;
 
-            if (tempStrLenght > 2)
+            if (tempStrLenght > 3)
             {
-              memcpy(minStr,&tmpStr[3],tempStrLenght - 2);
+              memcpy(minStr,&tmpStr[3],tempStrLenght - 3);
               data.Longitude = atof(degStr) +atof(minStr)/60.0;
             }
           break;
