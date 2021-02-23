@@ -19,7 +19,7 @@ public:
     void start();
     void getReadData(gps_common::GPSFix& fixMsg);
 
-
+  
 private:
   
     struct nmeaGGAData
@@ -151,5 +151,10 @@ private:
     nmeaGSAData m_gsaData = {};
     nmeaGSVData m_gsvData = {};
     nmeaRMCData m_rmcData = {};
-    nmeaVTGData m_vtgData = {};      
+    nmeaVTGData m_vtgData = {};     
+
+    gps_common::GPSFix m_msgFixLast = {}; 
+    double m_prevTrackMadeGoodDeg = 0.0;
+
+
 };

@@ -87,6 +87,7 @@ int main(int argc, char **argv)
      * This is a message object. You stuff it with data, and then publish it.
      */
     gps_common::GPSFix msgFix = {};
+
     //gps_common::GPSStatus msgStatus = {};
 
     // std::stringstream ss;
@@ -95,9 +96,9 @@ int main(int argc, char **argv)
     
     //get the data
     locoGpsNode.getReadData(msgFix);
-
+             
     ROS_DEBUG("\nlat:%lf lon:%lf alt:%lf\nsat:%d speed:%lf\nhdop:%lf track:%lf\nstatus=%d", msgFix.latitude, msgFix.longitude,msgFix.altitude, msgFix.status.satellites_used, msgFix.speed, msgFix.hdop, msgFix.track,msgFix.status.status);
-
+    
     /**
      * The publish() function is how you send messages. The parameter
      * is the message object. The type of this object must agree with the type
@@ -136,7 +137,7 @@ ClocoGpsNode::~ClocoGpsNode()
 
 void ClocoGpsNode::start()
 {
-  openCommunication("192.168.168.184",20175);
+  openCommunication("192.168.168.105",20175);
   m_receiveDataThread = std::thread(&ClocoGpsNode::receiveData, this);
 }
 
@@ -145,6 +146,15 @@ void ClocoGpsNode::getReadData(gps_common::GPSFix& fixMsg)
 {
   std::lock_guard<std::mutex>lock(m_mutex);
   
+  //if the data is all 0 do not updat ethe data
+  if ((m_rmcData.Latitude == 0.0) && (m_rmcData.Longitude == 0.0) && (m_ggaData.AntenaAlt == 0.0))
+  {    
+    ROS_DEBUG("\nAll %lf take prev",0.0);
+    
+    //get the last data because current is 0.0
+    fixMsg = m_msgFixLast;
+    return;
+  }
   //gps fix
   fixMsg.latitude = m_rmcData.Latitude;  //double GGA/RMC
   
@@ -165,12 +175,26 @@ void ClocoGpsNode::getReadData(gps_common::GPSFix& fixMsg)
   fixMsg.hdop = m_ggaData.HourDilutionOfPrescision; //GGA 
   fixMsg.altitude = m_ggaData.AntenaAlt; //float64 GGA
   fixMsg.speed = m_rmcData.SpeedOverGroundKnot; //double RMC/VTG - take from RMC
-  fixMsg.track = m_rmcData.TrackMadeGoodDeg; //double RMC/VTG - take from RMC
 
+  //if the prev yaw diff from 0 and now received 0->show the prev
+  if ((m_rmcData.TrackMadeGoodDeg == 0.0) && (m_prevTrackMadeGoodDeg != 0.0))
+  {
+    fixMsg.track = m_prevTrackMadeGoodDeg;
+    ROS_DEBUG("\ntake prev heading =%lf",fixMsg.track);
+  }
+  else
+  {
+    fixMsg.track = m_rmcData.TrackMadeGoodDeg; //double RMC/VTG - take from RMC
+    m_prevTrackMadeGoodDeg = m_rmcData.TrackMadeGoodDeg;
+    ROS_DEBUG("\ntake new heading=%lf",fixMsg.track);
+  }
 
   //gps status
   fixMsg.status.status = m_ggaData.Quality; //Position fix indicator int16 GGA/RMC
   fixMsg.status.satellites_used = m_ggaData.SatNum; //int16  satellite_used  GGA/RMC - take from GGA
+
+  //save the last data
+  m_msgFixLast = fixMsg;
 }
 
 bool ClocoGpsNode::isSameChksumOk()
